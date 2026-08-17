@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Build output
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Test and coverage output
+coverage/
+.vitest/
+
+# Environment — never commit real configuration.
+# `.env.example` is the documented template and IS tracked.
+.env
+.env.*
+!.env.example
+
+# Secrets and credentials, in case one is ever written to disk by mistake.
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Editors and OS noise
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Local database volumes from docker-compose
+.postgres-data/

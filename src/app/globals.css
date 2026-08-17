@@ -1,0 +1,72 @@
+@import 'tailwindcss';
+
+/**
+ * Design tokens.
+ *
+ * Defined as CSS custom properties on :root so the palette can be swapped for a
+ * customer's brand without touching a single component, and so the dark theme is
+ * a token override rather than a parallel set of classes.
+ */
+@theme {
+  --color-canvas: #fbfbfd;
+  --color-surface: #ffffff;
+  --color-border: #e4e4e9;
+  --color-ink: #16161a;
+  --color-ink-muted: #62626d;
+
+  --color-brand: #1c4ed8;
+  --color-brand-soft: #eef2ff;
+
+  /* Severity colours. Chosen to stay distinguishable under the common forms of
+     colour blindness: they differ in lightness as well as hue. */
+  --color-critical: #b4232b;
+  --color-high: #c2560c;
+  --color-medium: #8a6100;
+  --color-low: #3a6b3f;
+  --color-info: #3d5a80;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #0d0d11;
+    --color-surface: #16161c;
+    --color-border: #2a2a33;
+    --color-ink: #f2f2f5;
+    --color-ink-muted: #9a9aa6;
+    --color-brand: #7f9cf5;
+    --color-brand-soft: #1c2340;
+  }
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Never remove the focus ring — replace it with a better one. Keyboard users
+   cannot navigate a page whose focus is invisible. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Respect a user's stated preference for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

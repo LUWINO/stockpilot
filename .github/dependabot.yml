@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/London
+    open-pull-requests-limit: 5
+
+    # Group the routine churn into single pull requests. Twenty individual
+    # patch-bump PRs a week do not get reviewed; two grouped ones do.
+    groups:
+      production-patches:
+        dependency-type: production
+        update-types: ['patch']
+      development:
+        dependency-type: development
+        update-types: ['minor', 'patch']
+
+    labels:
+      - dependencies
+
+    # Major upgrades to the framework and the database driver change behaviour in
+    # ways that need a human reading a changelog, not an automatic bump.
+    ignore:
+      - dependency-name: next
+        update-types: ['version-update:semver-major']
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: drizzle-orm
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - ci

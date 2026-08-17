@@ -1,0 +1,117 @@
+StockPilot Commercial Licence
+Version 1.0, 17 August 2026
+
+Copyright (c) 2026 the StockPilot authors. All rights reserved.
+
+────────────────────────────────────────────────────────────────────────────────
+SUMMARY (not a substitute for the terms below)
+
+  You may evaluate this software freely.
+  You need a commercial licence to run it in production.
+  You may not redistribute it or offer it as a service to third parties.
+
+  This licence is a starting point, not a constraint. If you would rather run
+  StockPilot as open core, see docs/COMMERCIAL.md — relicensing under Apache-2.0
+  is a supported option and the codebase carries no dependency that prevents it.
+────────────────────────────────────────────────────────────────────────────────
+
+1. DEFINITIONS
+
+   "Software" means this source code, its documentation and any accompanying
+   materials.
+
+   "Licensor" means the copyright holder identified above.
+
+   "You" means the individual or legal entity exercising rights under this
+   Licence.
+
+   "Production Use" means any use in the conduct of Your business operations,
+   including managing inventory that has commercial value. Evaluation, testing,
+   development and demonstration are not Production Use.
+
+   "Commercial Licence" means a separate written agreement with the Licensor
+   permitting Production Use.
+
+2. EVALUATION GRANT
+
+   The Licensor grants You a non-exclusive, non-transferable, revocable licence
+   to download, install, run, study and modify the Software for the purposes of
+   evaluation, testing, development and internal demonstration, without charge
+   and without any time limit.
+
+3. PRODUCTION USE
+
+   Production Use requires a Commercial Licence. Contact the Licensor to obtain
+   one. Terms, including permitted scale and support obligations, are set out in
+   that agreement.
+
+4. RESTRICTIONS
+
+   Except as expressly permitted by this Licence or a Commercial Licence, You may
+   not:
+
+   (a) distribute, sublicense, sell, lease or lend the Software or any derivative
+       of it to any third party;
+
+   (b) provide the Software to third parties as a hosted or managed service;
+
+   (c) remove or obscure any copyright, trademark or attribution notice;
+
+   (d) use the Licensor's trademarks except to describe the origin of the
+       Software factually.
+
+5. MODIFICATIONS
+
+   You may modify the Software for Your own use. Modifications are Yours, and
+   this Licence continues to apply to the original Software and to any derivative
+   of it. You are encouraged, but not required, to contribute improvements back;
+   see CONTRIBUTING.md.
+
+6. RESERVATION OF RIGHTS
+
+   All rights not expressly granted are reserved by the Licensor. No rights are
+   granted by implication or estoppel.
+
+7. TERM AND TERMINATION
+
+   This Licence applies until terminated. It terminates automatically if You
+   breach any of its terms. On termination You must cease all use and destroy all
+   copies. Sections 8, 9 and 10 survive termination.
+
+8. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT.
+
+   IN PARTICULAR, AND WITHOUT LIMITATION: THE SOFTWARE INCLUDES AUTONOMOUS
+   FEATURES THAT CAN INITIATE PURCHASING AND OTHER COMMERCIAL ACTIONS. THE
+   LICENSOR DOES NOT WARRANT THAT ANY FORECAST, RECOMMENDATION OR AUTONOMOUS
+   ACTION WILL BE ACCURATE, SUITABLE OR PROFITABLE. YOU ARE SOLELY RESPONSIBLE
+   FOR CONFIGURING THE AUTONOMY LIMITS DESCRIBED IN docs/AUTONOMY.md AND FOR
+   SUPERVISING THE SOFTWARE'S OPERATION.
+
+9. LIMITATION OF LIABILITY
+
+   TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+   LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY OR
+   CONSEQUENTIAL DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, GOODWILL OR
+   ANTICIPATED SAVINGS, OR FOR ANY PURCHASING, STOCKING OR INVENTORY DECISION
+   MADE BY OR THROUGH THE SOFTWARE, HOWEVER CAUSED AND ON ANY THEORY OF
+   LIABILITY, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+   Nothing in this Licence excludes or limits liability for death or personal
+   injury caused by negligence, for fraud, or for any other liability that
+   cannot lawfully be excluded.
+
+10. GOVERNING LAW
+
+   This Licence is governed by the laws of England and Wales, and the courts of
+   England and Wales have exclusive jurisdiction, without prejudice to any
+   mandatory consumer protections available to You in Your place of residence.
+
+11. THIRD-PARTY COMPONENTS
+
+   The Software depends on third-party open-source packages, each licensed under
+   its own terms. Those terms govern those components. Run `npm ls --all` for the
+   current list.
