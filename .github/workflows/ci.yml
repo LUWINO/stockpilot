@@ -1,0 +1,199 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Dependencies rot even when the code does not; a weekly run catches a newly
+  # disclosed advisory in a package nobody has touched for months.
+  schedule:
+    - cron: '0 6 * * 1'
+
+# Cancel superseded runs on the same branch. A queue of stale runs wastes minutes
+# and delays feedback on the commit that actually matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege by default. Jobs that need more request it explicitly.
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.22'
+
+jobs:
+  verify:
+    name: Typecheck, lint and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        # `--ignore-scripts` blocks lifecycle scripts, the standard vector for a
+        # compromised transitive dependency to run code on the runner.
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: verify
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Build
+        env:
+          # Placeholders: the build validates configuration at import time but
+          # never connects to anything.
+          DATABASE_URL: postgres://placeholder:5432/placeholder
+          SESSION_SECRET: ci-placeholder-secret-value-long-enough-for-schema
+        run: npm run build
+
+  migrations:
+    name: Migrations apply to a clean database
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: verify
+
+    # A migration that only ever runs against a database that already has the
+    # previous version is a migration nobody has tested. This applies every one
+    # in order to an empty database, which is what a new customer will do.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: stockpilot
+          POSTGRES_PASSWORD: stockpilot
+          POSTGRES_DB: stockpilot_ci
+        options: >-
+          --health-cmd "pg_isready -U stockpilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgres://stockpilot:stockpilot@localhost:5432/stockpilot_ci
+        run: npm run db:migrate
+
+      - name: Verify tenant isolation is actually enforced
+        env:
+          PGPASSWORD: stockpilot
+        run: |
+          # Row-level security is the control that keeps one customer's stock
+          # invisible to another. Asserting it here means a future migration
+          # that forgets to enable it on a new table fails CI rather than
+          # shipping quietly.
+          missing=$(psql -h localhost -U stockpilot -d stockpilot_ci -tAc "
+            SELECT string_agg(c.relname, ', ')
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relkind = 'r'
+              AND c.relname NOT IN ('__drizzle_migrations')
+              AND NOT c.relrowsecurity;
+          ")
+          if [ -n "$missing" ]; then
+            echo "::error::Tables without row-level security: $missing"
+            exit 1
+          fi
+          echo "Row-level security is enabled on every table."
+
+      - name: Verify the ledger is append-only
+        env:
+          PGPASSWORD: stockpilot
+        run: |
+          # The audit trail's value rests entirely on being unfalsifiable, so the
+          # trigger that enforces it is worth asserting explicitly.
+          for table in stock_movements audit_log; do
+            count=$(psql -h localhost -U stockpilot -d stockpilot_ci -tAc "
+              SELECT count(*) FROM pg_trigger
+              WHERE tgrelid = '${table}'::regclass AND NOT tgisinternal;
+            ")
+            if [ "$count" -lt 1 ]; then
+              echo "::error::${table} has no append-only trigger"
+              exit 1
+            fi
+          done
+          echo "Append-only triggers are present."
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Audit for known vulnerabilities
+        # Fails on high and critical only. Failing on every low-severity advisory
+        # in a transitive dev dependency trains people to ignore the job, which
+        # is worse than not running it.
+        run: npm audit --audit-level=high
+
+      - name: Check for a stale lockfile
+        # A package.json change without the matching lockfile update means CI and
+        # production install different trees.
+        run: |
+          npm ci --ignore-scripts --dry-run >/dev/null
+          git diff --exit-code package-lock.json

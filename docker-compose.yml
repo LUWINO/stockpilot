@@ -1,0 +1,71 @@
+# Local development stack: Postgres, the web console and the autonomous agent.
+#
+# The agent runs as its own service rather than a thread inside the web process.
+# That mirrors how it should be deployed in production and makes an important
+# property visible: the two scale, fail and restart independently.
+#
+#   docker compose up -d
+#   docker compose exec web npm run db:migrate
+#   docker compose exec web npm run seed
+#
+# Not a production configuration — see docs/DEPLOYMENT.md for that.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: stockpilot
+      POSTGRES_PASSWORD: stockpilot
+      POSTGRES_DB: stockpilot
+      # Deterministic collation, so ORDER BY behaves identically everywhere.
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=en-GB'
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U stockpilot -d stockpilot']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Dependants wait for this to pass before starting, so nothing races the
+    # database on a cold boot.
+
+  web:
+    build:
+      context: .
+      target: runner
+    environment:
+      DATABASE_URL: postgres://stockpilot:stockpilot@postgres:5432/stockpilot
+      SESSION_SECRET: local-development-secret-not-for-production-use-ok
+      APP_URL: http://localhost:3000
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  agent:
+    build:
+      context: .
+      target: runner
+    command: ['node', '--experimental-strip-types', 'src/worker/main.ts']
+    environment:
+      DATABASE_URL: postgres://stockpilot:stockpilot@postgres:5432/stockpilot
+      SESSION_SECRET: local-development-secret-not-for-production-use-ok
+      APP_URL: http://localhost:3000
+      # Short interval locally so changes are visible without waiting an hour.
+      AGENT_INTERVAL_MINUTES: '5'
+      AGENT_ENABLED: 'true'
+      LOG_LEVEL: debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # The agent commits money, so give it time to finish a cycle on shutdown
+    # rather than killing it mid-transaction.
+    stop_grace_period: 60s
+
+volumes:
+  postgres-data:
