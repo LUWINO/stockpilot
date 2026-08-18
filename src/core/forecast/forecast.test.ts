@@ -132,6 +132,38 @@ describe('holtWinters', () => {
     expect(Math.max(...point) - Math.min(...point)).toBeGreaterThan(5);
   });
 
+  it('does not collapse over a long horizon because of one low final day', () => {
+    // A partially complete trading day, or a depot that has not synced yet,
+    // appears as a trailing zero. Undamped, the trend extrapolates that downturn
+    // across the whole horizon and the forecast falls apart — which would stop
+    // the agent replenishing a perfectly healthy product.
+    const seasonal = buildSeries({ days: 365, base: 60, weekly: 40, noise: 6 });
+    const trueMean = seasonal.reduce((a, b) => a + b, 0) / seasonal.length;
+
+    const withPartialDay = [...seasonal, 0];
+    const point = holtWinters(7)(withPartialDay, 28).point;
+    const forecastMean = point.reduce((a, b) => a + b, 0) / point.length;
+
+    // Tolerate the dip a single zero legitimately causes, but nothing like the
+    // collapse an undamped trend produces.
+    expect(forecastMean).toBeGreaterThan(trueMean * 0.7);
+    // The far horizon must not run away downward either.
+    expect(point[27] ?? 0).toBeGreaterThan(trueMean * 0.4);
+  });
+
+  it('damps its trend rather than extrapolating it linearly', () => {
+    const rising = buildSeries({ days: 200, base: 30, weekly: 10, trend: 0.4, noise: 2 });
+    const point = holtWinters(7)(rising, 60).point;
+
+    // With linear extrapolation the 60-day-ahead level would exceed the 30-day
+    // one by roughly the same step again; damping makes the gap shrink.
+    const early = point.slice(0, 7).reduce((a, b) => a + b, 0) / 7;
+    const middle = point.slice(27, 34).reduce((a, b) => a + b, 0) / 7;
+    const late = point.slice(53, 60).reduce((a, b) => a + b, 0) / 7;
+
+    expect(late - middle).toBeLessThan(middle - early);
+  });
+
   it('requires two full seasons before it will run', () => {
     expect(holtWinters(7)(Array.from({ length: 10 }, () => 5), 3).method).not.toBe('holt_winters');
   });

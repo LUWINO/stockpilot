@@ -144,6 +144,30 @@ export function planReplenishment(input: ReplenishmentInput): ReplenishmentPlan 
   });
 
   const inventoryPosition = available + onOrder;
+
+  /**
+   * The two levels of an (s, S) policy, and why they must differ.
+   *
+   * Safety stock is sized over the whole risk window — lead time *plus* the wait
+   * until the next review — because that is how long the business is exposed
+   * before it can react again. That is correct, and unchanged.
+   *
+   * The *reorder point* is a different question: how low can stock get before an
+   * order must be placed for it to arrive in time? That is lead-time demand plus
+   * the buffer. Reusing the risk-window figure here inflates `s` until it equals
+   * `S`, and then the two collapse: the trigger level and the target become the
+   * same number, the computed deficit is always zero or negative, and only the
+   * EOQ produces any order at all. The rationale then reads "ordering 315 to
+   * reach the target of 189" while the reorder point is also 189, which is
+   * nonsense to anyone checking the arithmetic.
+   *
+   * Separating them restores S > s by exactly one review period of demand.
+   */
+  const reorderPoint = Math.max(
+    0,
+    Math.ceil(averageDailyDemand * leadTime.leadTimeDays + safety.safetyStock),
+  );
+
   const orderUpToLevel = Math.ceil(
     averageDailyDemand * (leadTime.leadTimeDays + reviewPeriodDays) + safety.safetyStock,
   );
@@ -154,7 +178,7 @@ export function planReplenishment(input: ReplenishmentInput): ReplenishmentPlan 
     holdingCostPerUnitPerYear: holdingCostPerUnitPerYear(unitCost, holdingCostRate),
   });
 
-  const shouldOrder = inventoryPosition <= safety.reorderPoint && averageDailyDemand > 0;
+  const shouldOrder = inventoryPosition <= reorderPoint && averageDailyDemand > 0;
 
   // Order at least back to the target, but take the EOQ if it is larger: the
   // fixed ordering cost is already sunk once the order exists.
@@ -172,7 +196,7 @@ export function planReplenishment(input: ReplenishmentInput): ReplenishmentPlan 
   return {
     shouldOrder: shouldOrder && orderQuantity > 0,
     orderQuantity,
-    reorderPoint: safety.reorderPoint,
+    reorderPoint,
     safetyStock: safety.safetyStock,
     orderUpToLevel,
     inventoryPosition,
@@ -187,11 +211,11 @@ export function planReplenishment(input: ReplenishmentInput): ReplenishmentPlan 
     safety,
     orderValue: multiply(unitCost, orderQuantity, 'half-even'),
     rationale: shouldOrder
-      ? `Position ${inventoryPosition} is at or below the reorder point ${safety.reorderPoint} ` +
+      ? `Position ${inventoryPosition} is at or below the reorder point ${reorderPoint} ` +
         `(${leadTime.leadTimeDays.toFixed(1)}d lead time, ${(serviceLevel * 100).toFixed(1)}% service level). ` +
         `Ordering ${orderQuantity} to reach the target of ${orderUpToLevel}, ` +
         `taking cover from ${formatDays(coverNow)} to ${formatDays(coverAfter)}.`
-      : `Position ${inventoryPosition} is above the reorder point ${safety.reorderPoint}; ` +
+      : `Position ${inventoryPosition} is above the reorder point ${reorderPoint}; ` +
         `${formatDays(coverNow)} of cover remains.`,
   };
 }

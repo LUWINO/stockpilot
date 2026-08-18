@@ -302,7 +302,7 @@ export function holtWinters(period: number): Forecaster {
   return (series, horizon) => {
     if (series.length < 2 * period) return holtLinear()(series, horizon);
 
-    let bestParams = { alpha: 0.3, beta: 0.1, gamma: 0.1 };
+    let bestParams = { alpha: 0.3, beta: 0.1, gamma: 0.1, phi: 0.95 };
     let best = holtWintersFit(series, period, bestParams.alpha, bestParams.beta, bestParams.gamma);
     let bestSse = sumSquaredError(series, best.fitted);
 
@@ -313,17 +313,31 @@ export function holtWinters(period: number): Forecaster {
           const sse = sumSquaredError(series, fit.fitted);
           if (sse < bestSse) {
             bestSse = sse;
-            bestParams = { alpha: a, beta: b, gamma: g };
+            bestParams = { ...bestParams, alpha: a, beta: b, gamma: g };
             best = fit;
           }
         }
       }
     }
 
+    // Damp the trend, exactly as `holtLinear` does.
+    //
+    // Without damping the trend is extrapolated linearly, so `level + h × trend`
+    // runs away over a long horizon. That is not a theoretical concern: a single
+    // spurious low day at the end of the series — a partially complete trading
+    // day, a depot that has not synced yet — tilts the estimated trend downward,
+    // and by day 28 the forecast has collapsed to a fraction of true demand. The
+    // system would then quietly stop replenishing a healthy product.
+    //
+    // Damping accumulates the trend as a geometric series, which converges.
+    const phi = bestParams.phi;
     const point: number[] = [];
+    let damping = 0;
+
     for (let h = 1; h <= horizon; h += 1) {
+      damping += phi ** h;
       const seasonalIndex = (series.length + h - 1) % period;
-      point.push(Math.max(0, best.level + h * best.trend + at(best.seasonal, seasonalIndex)));
+      point.push(Math.max(0, best.level + damping * best.trend + at(best.seasonal, seasonalIndex)));
     }
 
     return {

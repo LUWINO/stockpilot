@@ -259,11 +259,26 @@ export async function loadDemandHistory(
 
   const observed = new Map(rows.map((row) => [row.day, row.quantity]));
   const earliest = rows.at(0)?.day;
-  if (earliest === undefined) return [];
+  const latest = rows.at(-1)?.day;
+  if (earliest === undefined || latest === undefined) return [];
 
   const out: DemandPoint[] = [];
   const from = Date.parse(`${earliest}T00:00:00Z`);
-  const to = Date.parse(`${today.toISOString().slice(0, 10)}T00:00:00Z`);
+
+  // End at the last day that actually has data, NOT at today.
+  //
+  // Zero-filling interior gaps is essential — a missing day genuinely means zero
+  // sold, and dropping it makes intermittent demand look continuous. But
+  // extending that logic to *today* invents a zero for a day that is still in
+  // progress, or that has simply not been written yet by a till or depot that
+  // syncs overnight.
+  //
+  // That single fabricated zero is not harmless. It tilts the estimated trend
+  // downward, and a trend method extrapolating over a 28-day horizon turns the
+  // tilt into a collapsed forecast — so the agent stops replenishing a product
+  // that is selling perfectly well. Every forecast would carry this bias, every
+  // day, because there is always a partially complete day at the end.
+  const to = Date.parse(`${latest}T00:00:00Z`);
 
   for (let t = from; t <= to; t += 86_400_000) {
     const date = new Date(t).toISOString().slice(0, 10);

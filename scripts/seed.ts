@@ -46,6 +46,22 @@ function seededRandom(seed: number): () => number {
 
 const random = seededRandom(20260817);
 
+/**
+ * How each SKU is left at the end of the history.
+ *
+ * A seed where every product is comfortably stocked demonstrates nothing: the
+ * agent correctly does nothing, and the demo looks broken. Each SKU is
+ * deliberately left in a different state so the first cycle exercises a
+ * different part of the engine.
+ */
+type EndState =
+  /** Drawn down below its reorder point → REPLENISH. */
+  | 'low'
+  /** Comfortably stocked → no decision, which is also worth seeing. */
+  | 'healthy'
+  /** Far more cover than the target → OVERSTOCK alert. */
+  | 'overstocked';
+
 interface DemandShape {
   readonly code: string;
   readonly name: string;
@@ -53,6 +69,7 @@ interface DemandShape {
   readonly unitPrice: number;
   readonly perishable: boolean;
   readonly shelfLifeDays: number | null;
+  readonly endState: EndState;
   /** Units sold on day `n`. */
   readonly demand: (day: number) => number;
 }
@@ -65,6 +82,8 @@ const CATALOGUE: DemandShape[] = [
     unitPrice: 3_200,
     perishable: false,
     shelfLifeDays: null,
+    // Left below its reorder point, so the agent has to buy.
+    endState: 'low',
     // Smooth, steady demand: exponential smoothing territory.
     demand: (day) => Math.max(0, Math.round(18 + (random() - 0.5) * 5 + day * 0.01)),
   },
@@ -75,6 +94,7 @@ const CATALOGUE: DemandShape[] = [
     unitPrice: 420,
     perishable: true,
     shelfLifeDays: 4,
+    endState: 'healthy',
     // Strong weekend peak: this is what Holt–Winters exists for.
     demand: (day) => {
       const weekday = day % 7;
@@ -89,6 +109,8 @@ const CATALOGUE: DemandShape[] = [
     unitPrice: 24_000,
     perishable: false,
     shelfLifeDays: null,
+    // A slow mover with far too many on the shelf — common, and expensive.
+    endState: 'overstocked',
     // Intermittent: mostly zeros. Plain smoothing under-forecasts this badly,
     // which is exactly why Croston is in the candidate set.
     demand: (day) => (day % 47 === 0 ? 1 + Math.floor(random() * 2) : 0),
@@ -100,6 +122,7 @@ const CATALOGUE: DemandShape[] = [
     unitPrice: 1_950,
     perishable: true,
     shelfLifeDays: 30,
+    endState: 'low',
     // Erratic: real volume, high variance.
     demand: (day) => Math.max(0, Math.round(12 + (random() - 0.5) * 18 + (day % 30 < 5 ? 8 : 0))),
   },
@@ -217,12 +240,38 @@ async function main(): Promise<void> {
     const movementRows: (typeof stockMovements.$inferInsert)[] = [];
     let onHand = 0;
 
+    // A perishable SKU gets a real lot, and its receipts are booked against it.
+    // Without the link, lot balances compute to zero and the expiry logic can
+    // never see any stock to worry about.
+    //
+    // The lot is created before the movements because they carry a foreign key
+    // to it.
+    const lotId = item.perishable ? randomUUID() : null;
+
+    if (lotId !== null) {
+      await db.insert(lots).values({
+        id: lotId,
+        orgId,
+        skuId,
+        siteId: siteIds.main,
+        code: `LOT-${item.code}-001`,
+        // Deliberately near expiry, so the first agent run has something real to
+        // say about markdowns.
+        expiresOn: new Date(today.getTime() + 3 * 86_400_000).toISOString().slice(0, 10),
+        receivedAt: new Date(today.getTime() - 3 * 86_400_000),
+      });
+    }
+
+    // For a 'low' SKU, stop buying near the end so stock drains below the
+    // reorder point and the agent has a genuine decision to make.
+    const stopReplenishingFrom = item.endState === 'low' ? HISTORY_DAYS - 20 : HISTORY_DAYS;
+
     for (let day = 0; day < HISTORY_DAYS; day += 1) {
       const date = new Date(today.getTime() - (HISTORY_DAYS - day) * 86_400_000);
       const quantity = item.demand(day);
 
       // Replenish when stock would not cover the next fortnight.
-      if (onHand < quantity * 14) {
+      if (onHand < quantity * 14 && day < stopReplenishingFrom) {
         const receipt = Math.max(1, quantity * 21);
         onHand += receipt;
         movementRows.push({
@@ -233,6 +282,8 @@ async function main(): Promise<void> {
           quantity: receipt,
           actor: 'system:seed',
           occurredAt: date,
+          // Only the most recent receipts belong to the lot that is still open.
+          ...(lotId !== null && day >= HISTORY_DAYS - 3 ? { lotId } : {}),
         });
       }
 
@@ -273,20 +324,10 @@ async function main(): Promise<void> {
       lastIssuedAt: today,
     });
 
-    if (item.perishable) {
-      await db.insert(lots).values({
-        orgId,
-        skuId,
-        siteId: siteIds.main,
-        code: `LOT-${item.code}-001`,
-        // Deliberately near expiry, so the first agent run has something real to
-        // say about markdowns.
-        expiresOn: new Date(today.getTime() + 3 * 86_400_000).toISOString().slice(0, 10),
-        receivedAt: today,
-      });
-    }
-
-    console.log(`  ${item.code}: ${movementRows.length} movements, ${onHand} on hand`);
+    console.log(
+      `  ${item.code.padEnd(16)} ${String(movementRows.length).padStart(4)} movements, ` +
+        `${String(onHand).padStart(5)} on hand  (${item.endState})`,
+    );
   }
 
   console.log('\nSeed complete.');

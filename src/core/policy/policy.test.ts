@@ -292,6 +292,27 @@ describe('planReplenishment', () => {
     expect(weekly.safetyStock).toBeGreaterThan(daily.safetyStock);
   });
 
+  it('keeps the order-up-to level strictly above the reorder point', () => {
+    // If the two collapse to the same number the policy stops being (s, S): the
+    // deficit is always zero and only the EOQ produces an order, while the
+    // rationale claims to be "ordering up to" a level it has already reached.
+    for (const reviewPeriodDays of [1, 3, 7]) {
+      const plan = planReplenishment({ ...baseInput, reviewPeriodDays });
+
+      expect(plan.orderUpToLevel).toBeGreaterThan(plan.reorderPoint);
+      // The gap is one review period of demand.
+      expect(plan.orderUpToLevel - plan.reorderPoint).toBeCloseTo(
+        baseInput.averageDailyDemand * reviewPeriodDays,
+        0,
+      );
+    }
+  });
+
+  it('produces a genuine deficit to close, not just an EOQ-sized order', () => {
+    const plan = planReplenishment({ ...baseInput, available: 10 });
+    expect(plan.orderUpToLevel - plan.inventoryPosition).toBeGreaterThan(0);
+  });
+
   it('values the order at unit cost', () => {
     const plan = planReplenishment(baseInput);
     expect(plan.orderValue.amount).toBe(plan.orderQuantity * 1_850);
