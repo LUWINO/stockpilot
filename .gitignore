@@ -43,3 +43,5 @@ yarn-error.log*
 
 # Local database volumes from docker-compose
 .postgres-data/
+
+*.bundle
